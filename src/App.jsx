@@ -140,7 +140,7 @@ const App = () => {
           <label className="text-sm sm:text-lg font-semibold text-gray-600">Font Size</label>
           <select value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))}
             className="w-full h-10 border border-gray-300 rounded-lg">
-            {[2, 5, 10, 15, 20, 25, 30, 40].map((size) => (
+            {[2, 5, 8, 12, 16, 20, 22, 25].map((size) => (
               <option key={size} value={size}>{size}px</option>
             ))}
           </select>
