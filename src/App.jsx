@@ -5,7 +5,18 @@ const App = () => {
   const [textColor, setTextColor] = useState("#000000");
   const [backgroundColor, setBackgroundColor] = useState("#FFFFFF");
   const [fontSize, setFontSize] = useState(5);
-  const [drawing, setDrawing] = useState([]); // To store the drawing paths
+  const [drawing, setDrawing] = useState([]);
+  const [canvasWidth, setCanvasWidth] = useState(820); // Dynamic width
+
+  // Adjust canvas width based on screen size
+  useEffect(() => {
+    const updateCanvasSize = () => {
+      setCanvasWidth(window.innerWidth < 768 ? window.innerWidth - 40 : 820);
+    };
+    updateCanvasSize();
+    window.addEventListener("resize", updateCanvasSize);
+    return () => window.removeEventListener("resize", updateCanvasSize);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -13,14 +24,12 @@ const App = () => {
     ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Redraw the saved drawing with the new font size
+    // Redraw stored paths
     drawing.forEach((path) => {
       ctx.beginPath();
       ctx.moveTo(path[0].x, path[0].y);
       path.forEach((point, index) => {
-        if (index > 0) {
-          ctx.lineTo(point.x, point.y);
-        }
+        if (index > 0) ctx.lineTo(point.x, point.y);
       });
       ctx.strokeStyle = textColor;
       ctx.lineWidth = fontSize;
@@ -28,25 +37,13 @@ const App = () => {
     });
   }, [backgroundColor, fontSize, drawing]);
 
-  const handleColorChange = (event) => {
-    setTextColor(event.target.value);
-  };
-
-  const handleBackgroundColorChange = (event) => {
-    setBackgroundColor(event.target.value);
-  };
-
-  const handleFontSizeChange = (event) => {
-    setFontSize(Number(event.target.value)); // Ensure it's a number
-  };
-
   const handleClearCanvas = () => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    setDrawing([]); // Clear drawing state
+    setDrawing([]);
   };
 
   const handleSaveCanvas = () => {
@@ -68,117 +65,98 @@ const App = () => {
     if (savedCanvas) {
       const img = new Image();
       img.src = savedCanvas;
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0);
-      };
+      img.onload = () => ctx.drawImage(img, 0, 0);
     }
   };
 
-  const handleMouseDown = (event) => {
+  // Drawing Functions (Mouse & Touch)
+  const startDrawing = (x, y) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     ctx.beginPath();
-    ctx.moveTo(event.nativeEvent.offsetX, event.nativeEvent.offsetY);
+    ctx.moveTo(x, y);
     canvas.isDrawing = true;
-
-    // Start a new path
-    setDrawing((prevDrawing) => [
-      ...prevDrawing,
-      [{ x: event.nativeEvent.offsetX, y: event.nativeEvent.offsetY }],
-    ]);
+    setDrawing((prev) => [...prev, [{ x, y }]]);
   };
 
-  const handleMouseMove = (event) => {
+  const draw = (x, y) => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
 
     if (canvas.isDrawing) {
-      ctx.lineTo(event.nativeEvent.offsetX, event.nativeEvent.offsetY);
+      ctx.lineTo(x, y);
       ctx.strokeStyle = textColor;
       ctx.lineWidth = fontSize;
       ctx.stroke();
-
-      // Update drawing state with new point
-      setDrawing((prevDrawing) => {
-        const newDrawing = [...prevDrawing];
-        newDrawing[newDrawing.length - 1].push({
-          x: event.nativeEvent.offsetX,
-          y: event.nativeEvent.offsetY,
-        });
+      setDrawing((prev) => {
+        const newDrawing = [...prev];
+        newDrawing[newDrawing.length - 1].push({ x, y });
         return newDrawing;
       });
     }
   };
 
-  const handleMouseUp = () => {
+  const stopDrawing = () => {
     const canvas = canvasRef.current;
     canvas.isDrawing = false;
   };
 
+  // Mouse Events
+  const handleMouseDown = (event) => startDrawing(event.nativeEvent.offsetX, event.nativeEvent.offsetY);
+  const handleMouseMove = (event) => draw(event.nativeEvent.offsetX, event.nativeEvent.offsetY);
+  const handleMouseUp = stopDrawing;
+
+  // Touch Events
+  const handleTouchStart = (event) => {
+    event.preventDefault();
+    const touch = event.touches[0];
+    const rect = canvasRef.current.getBoundingClientRect();
+    startDrawing(touch.clientX - rect.left, touch.clientY - rect.top);
+  };
+
+  const handleTouchMove = (event) => {
+    event.preventDefault();
+    const touch = event.touches[0];
+    const rect = canvasRef.current.getBoundingClientRect();
+    draw(touch.clientX - rect.left, touch.clientY - rect.top);
+  };
+
+  const handleTouchEnd = stopDrawing;
+
   return (
-    <div className="relative flex flex-col items-center bg-gray-50 p-8 rounded-lg shadow-lg">
-      <div className="flex justify-between w-full max-w-xl mb-6">
-        <div className="flex flex-col items-start">
-          <label className="text-lg font-semibold text-gray-600 mb-2">Text Color</label>
-          <input
-            className="w-32 h-10 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            type="color"
-            value={textColor}
-            onChange={handleColorChange}
-          />
+    <div className="flex flex-col items-center bg-gray-50 p-4 sm:p-8 rounded-lg shadow-lg">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-lg mb-4">
+        <div className="flex flex-col">
+          <label className="text-sm sm:text-lg font-semibold text-gray-600">Text Color</label>
+          <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)}
+            className="w-full h-10 border border-gray-300 rounded-lg" />
         </div>
-        <div className="flex flex-col items-start">
-          <label className="text-lg font-semibold text-gray-600 mb-2">Background Color</label>
-          <input
-            className="w-32 h-10 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            type="color"
-            value={backgroundColor}
-            onChange={handleBackgroundColorChange}
-          />
+        <div className="flex flex-col">
+          <label className="text-sm sm:text-lg font-semibold text-gray-600">Background</label>
+          <input type="color" value={backgroundColor} onChange={(e) => setBackgroundColor(e.target.value)}
+            className="w-full h-10 border border-gray-300 rounded-lg" />
         </div>
-        <div className="flex flex-col items-start">
-          <label className="text-lg font-semibold text-gray-600 mb-2">Font Size</label>
-          <select
-            className="w-32 h-10 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            value={fontSize}
-            onChange={handleFontSizeChange}
-          >
-            {[2.4, 5, 10, 15, 20, 25, 30, 40, 45].map((size) => (
-              <option key={size} value={size}>
-                {size}px
-              </option>
+        <div className="flex flex-col">
+          <label className="text-sm sm:text-lg font-semibold text-gray-600">Font Size</label>
+          <select value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))}
+            className="w-full h-10 border border-gray-300 rounded-lg">
+            {[2, 5, 10, 15, 20, 25, 30, 40].map((size) => (
+              <option key={size} value={size}>{size}px</option>
             ))}
           </select>
         </div>
       </div>
-      <canvas
-        ref={canvasRef}
-        width={820}
-        height={400}
-        className="border border-gray-400 rounded-lg shadow-lg mb-6"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
+
+      <canvas ref={canvasRef} width={canvasWidth} height={400}
+        className="border border-gray-400 rounded-lg shadow-lg mb-4"
+        onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}
+        onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
       ></canvas>
-      <div className="flex justify-between w-full max-w-xl">
-        <button
-          className="bg-red-600 text-white font-medium py-2 px-6 rounded-lg hover:bg-red-700 transition-colors duration-200"
-          onClick={handleClearCanvas}
-        >
-          Clear
-        </button>
-        <button
-          className="bg-green-600 text-white font-medium py-2 px-6 rounded-lg hover:bg-green-700 transition-colors duration-200"
-          onClick={handleSaveCanvas}
-        >
-          Save & Download
-        </button>
-        <button
-          className="bg-yellow-500 text-white font-medium py-2 px-6 rounded-lg hover:bg-yellow-600 transition-colors duration-200"
-          onClick={handleRetrieveCanvas}
-        >
-          Retrieve
-        </button>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 w-full max-w-lg">
+        <button className="bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition" onClick={handleClearCanvas}>Clear</button>
+        <button className="bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition" onClick={handleSaveCanvas}>Save</button>
+        <button className="bg-yellow-500 text-white py-2 rounded-lg hover:bg-yellow-600 transition" onClick={handleRetrieveCanvas}>Retrieve</button>
       </div>
     </div>
   );
